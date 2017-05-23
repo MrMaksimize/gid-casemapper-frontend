@@ -1,0 +1,10 @@
+{
+  "name": "parking-map",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "David Leonard <davidrobertleonard@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "serve" : "polymer serve -p 8080"
+  }
+}

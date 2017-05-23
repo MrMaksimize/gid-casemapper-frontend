@@ -1,0 +1,235 @@
+<!-- PolymerElement Components -->
+<link rel="import" href="../bower_components/polymer/polymer.html" />
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html" />
+
+<!-- Predix UI Components -->
+<link rel="import" href="../bower_components/px-map/px-map.html" />
+<link rel="import" href="../bower_components/px-map/px-map-tile-layer.html" />
+<link rel="import" href="../bower_components/px-map/px-map-control-zoom.html" />
+<link rel="import" href="../bower_components/px-map/px-map-marker-group.html" />
+
+<!-- Theme/CSS -->
+<link rel="import" href="../bower_components/px-theme/px-theme-styles.html">
+
+<dom-module id="sd-app">
+  <template>
+    <style include="px-theme-styles" is="custom-style"></style>
+    <style is="custom-style">
+      :host {
+        width: 100vw;
+        height: 100vh;
+      }
+      :root {
+        --px-map-icon-info-color: rgb(70,173,0);
+      }
+
+      .app {
+        display: flex;
+        flex-direction: column;
+        width: 95vw;
+        height: 95vh;
+        margin: 2.5vh 2.5vw;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        line-height: 0;
+        margin-bottom: 1rem;
+      }
+      .header p {
+        line-height: 1;
+        margin: 0;
+      }
+      .header h2 {
+        line-height: 1;
+        margin: 0;
+        flex: 1;
+        text-transform: uppercase;
+      }
+      .map {
+        flex: 1;
+        display: flex;
+      }
+    </style>
+
+    <!--
+      Endpoints:
+      * Open meters: https://fslnutvxr9.execute-api.us-east-1.amazonaws.com/prod/ips/list/open
+      * Closed meters: https://fslnutvxr9.execute-api.us-east-1.amazonaws.com/prod/ips/list/closed
+      * All meters: https://fslnutvxr9.execute-api.us-east-1.amazonaws.com/prod/ips/list/all
+    -->
+    <iron-ajax
+        id="ajax"
+        url="https://fslnutvxr9.execute-api.us-east-1.amazonaws.com/prod/ips/list/all"
+        last-response="{{rawMeters}}"
+        auto>
+    </iron-ajax>
+
+    <div class="app">
+      <div class="header">
+        <h2>San Diego Parking Meters</h2>
+        <p>{{status}}</p>
+      </div>
+      <div class="map">
+        <px-map lat="32.727364280927794" lng="-117.16884613037111" zoom="13" flex-to-size>
+          <px-map-tile-layer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"></px-map-tile-layer>
+          <px-map-control-zoom position="bottomright"></px-map-control-zoom>
+          <px-map-marker-group name="Meters" data="{{meters}}"></px-map-marker-group>
+        </px-map>
+      </div>
+    </div>
+  </template>
+</dom-module>
+<script>
+(function(){
+  Polymer({
+    is: 'sd-app',
+    properties: {
+      meters: {
+        type: Object
+      },
+      rawMeters: {
+        type: Object,
+        observer: '_processMetersJSON'
+      },
+      status: {
+        type: Boolean,
+        value: 'Loading...'
+      }
+    },
+
+    _processMetersJSON: function(raw) {
+      if (!raw || typeof raw !== 'object' || !raw.hasOwnProperty('features')) {
+        this.set('status', 'Loading meters failed.');
+        return;
+      };
+
+      var meters = raw;
+      meters.features = raw.features.reduce((accum, rawFeature) => {
+        var feature = rawFeature;
+
+        var type;
+        if (feature.properties.state === 'open') type = 'info';
+        else if (feature.properties.state === 'closed') type = 'important';
+        else type = 'unknown';
+
+        feature.properties['marker-icon'] = {
+          'icon-base' : 'static-icon',
+          'icon-type' : type
+        };
+        feature.properties['marker-popup'] = {
+          'popup-base' : 'data-popup',
+          'popup-title' : `Parking Meter ${feature.properties.pole}`,
+          'popup-data' : {
+            'Status' : feature.properties.state === 'closed' ? 'In Use' : feature.properties.state,
+            'Area' : feature.properties.area,
+            'Pole' : feature.properties.pole,
+            'Last Payment' : feature.properties.latest_payment ? centsToDollars(feature.properties.latest_payment.amountpaid) : 'Unknown'
+          }
+        };
+        if (feature.properties.state === 'open' || feature.properties.state === 'closed') {
+          const {timeStr, time} = getTimeInWords(new Date(), new Date(feature.properties.latest_payment.local_enddatetime));
+          feature.properties['marker-popup']['popup-data'][timeStr] = time;
+        }
+        feature.id = feature.properties.pole;
+        accum = accum.concat([feature]);
+        return accum;
+      }, []);
+
+      this.set('status', 'Successfully loaded meters.');
+      this.set('meters', meters);
+    }
+  });
+
+  function getTimeInWords(now, time) {
+    if (now<time) {
+      return {timeStr:'Expires In', time: getTimeInMinutesUntil(time)};
+    } else {
+      return {timeStr:'Last Expired At', time: getTimeInMinutesAgo(time)};
+    }
+  }
+
+  /* Thanks to http://stackoverflow.com/questions/3177836/how-to-format-time-since-xxx-e-g-4-minutes-ago-similar-to-stack-exchange-site */
+  function getTimeInMinutesAgo(date) {
+    var seconds = Math.floor((new Date() - date) / 1000);
+    var interval = Math.floor(seconds / 31536000);
+
+    if (interval > 1) {
+      return interval + " years";
+    }
+    interval = Math.floor(seconds / 2592000);
+    if (interval > 1) {
+      return interval + " months";
+    }
+    interval = Math.floor(seconds / 86400);
+    if (interval > 1) {
+      return interval + " days";
+    }
+    interval = Math.floor(seconds / 3600);
+    if (interval > 1) {
+      return interval + " hours";
+    }
+    interval = Math.floor(seconds / 60);
+    if (interval > 1) {
+      return interval + " minutes";
+    }
+    return Math.floor(seconds) + " seconds";
+  }
+
+  function getTimeInMinutesUntil(date) {
+    var seconds = Math.floor((date - new Date()) / 1000);
+    var interval = Math.floor(seconds / 31536000);
+
+    if (interval > 1) {
+      return interval + " years";
+    }
+    interval = Math.floor(seconds / 2592000);
+    if (interval > 1) {
+      return interval + " months";
+    }
+    interval = Math.floor(seconds / 86400);
+    if (interval > 1) {
+      return interval + " days";
+    }
+    interval = Math.floor(seconds / 3600);
+    if (interval > 1) {
+      return interval + " hours";
+    }
+    interval = Math.floor(seconds / 60);
+    if (interval > 1) {
+      return interval + " minutes";
+    }
+    return Math.floor(seconds) + " seconds";
+  }
+
+  /**
+   * Normalizes cents into US dollar format and returns as a string with a prefix
+   * '$' character.
+   *
+   * Takes 65 and returns '$0.65'
+   * Takes 50 and returns '$0.50'
+   * Takes 100 and returns '$1.00'
+   *
+   * @param {Number} cents
+   * @return {String}
+   */
+  function centsToDollars(cents) {
+    if (!cents || cents === 0) {
+      return '$0.00';
+    }
+
+    var dollar = cents / 100;
+    var dollarStr = '$' + dollar;
+
+    // If whole number (e.g. 4) add .00
+    if (dollar % 1 === 0) {
+      dollarStr += '.00'
+    }
+    else if (dollarStr.indexOf('.') !== -1 && dollarStr.split('.')[1].length === 1) {
+      dollarStr += '0';
+    }
+
+    return dollarStr;
+  }
+})();
+</script>

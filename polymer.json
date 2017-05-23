@@ -1,0 +1,12 @@
+{
+  "entrypoint": "index.html",
+  "shell": "src/sd-app.html",
+  "sources": [
+    "src/**/*",
+    "bower.json"
+  ],
+  "extraDependencies": [
+    "bower_components/webcomponentsjs/webcomponents-lite.min.js",
+    "bower_components/font-awesome/fonts/**"
+  ]
+}

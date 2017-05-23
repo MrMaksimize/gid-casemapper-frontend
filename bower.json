@@ -1,0 +1,25 @@
+{
+  "name": "parking-map",
+  "authors": [
+    "David Leonard <davidrobertleonard@gmail.com>"
+  ],
+  "description": "",
+  "main": "",
+  "license": "MIT",
+  "homepage": "",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "px-map": "^1.4.4",
+    "iron-ajax": "^1.4.4",
+    "webcomponentsjs": "^0.7.24",
+    "polymer": "^1.9.1",
+    "px-theme": "^2.0.4"
+  }
+}
