@@ -6,7 +6,7 @@
 <link rel="import" href="../bower_components/px-map/px-map.html" />
 <link rel="import" href="../bower_components/px-map/px-map-tile-layer.html" />
 <link rel="import" href="../bower_components/px-map/px-map-control-zoom.html" />
-<link rel="import" href="../bower_components/px-map/px-map-marker-group.html" />
+<link rel="import" href="../bower_components/px-map/px-map-layer-geojson.html" />
 
 <!-- Theme/CSS -->
 <link rel="import" href="../bower_components/px-theme/px-theme-styles.html">
@@ -60,21 +60,24 @@
     -->
     <iron-ajax
         id="ajax"
-        url="https://fslnutvxr9.execute-api.us-east-1.amazonaws.com/prod/ips/list/all"
-        last-response="{{rawMeters}}"
+        url="https://sk8vszedk7.execute-api.us-east-1.amazonaws.com/dev/cases?near=[[mapLng]],[[mapLat]]&service_name=[[serviceName]]"
+        last-response="{{rawRequests}}"
+        debounce-duration="300"
         auto>
     </iron-ajax>
 
     <div class="app">
       <div class="header">
-        <h2>San Diego Parking Meters</h2>
+        <h2>GID CaseMapper</h2>
         <p>{{status}}</p>
       </div>
       <div class="map">
-        <px-map lat="32.727364280927794" lng="-117.16884613037111" zoom="13" flex-to-size>
-          <px-map-tile-layer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"></px-map-tile-layer>
+        <px-map lat="[[mapLat]]" lng="[[mapLng]]" zoom="[[mapZoom]]" flex-to-size>
+          <!--<px-map lat="32.727364280927794" lng="-117.16884613037111" zoom="13" flex-to-size>-->
+          <px-map-tile-layer url="http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"></px-map-tile-layer>
           <px-map-control-zoom position="bottomright"></px-map-control-zoom>
-          <px-map-marker-group name="Meters" data="{{meters}}"></px-map-marker-group>
+          <!--<px-map-marker-group name="Requests" data="{{requests}}"></px-map-marker-group>-->
+          <px-map-layer-geojson data="{{requests}}" show-feature-properties></px-map-layer-geojson>
         </px-map>
       </div>
     </div>
@@ -85,59 +88,90 @@
   Polymer({
     is: 'sd-app',
     properties: {
-      meters: {
+      requests: {
         type: Object
       },
-      rawMeters: {
+      rawRequests: {
         type: Object,
-        observer: '_processMetersJSON'
+        observer: '_processRequestsJSON'
+      },
+      mapLat: {
+        type: String,
+        value: "32.727364280927794"
+      },
+      mapLng: {
+        type: String,
+        value: "-117.16884613037111"
+      },
+      mapZoom: {
+        type: String,
+        value: "17"
+      },
+      serviceName: {
+        type: String,
+        value: "Pothole"
       },
       status: {
         type: Boolean,
         value: 'Loading...'
       }
     },
+    attached: function() {
+        var lngLat = this._getQSValue("near");
+        var serviceName = this._getQSValue("service_name");
+        console.log(serviceName);
+        if (!lngLat || lngLat == "")
+            alert("No Location Passed");
 
-    _processMetersJSON: function(raw) {
+        lngLat = lngLat.split(',');
+        console.log(lngLat);
+        this.set('mapLng', lngLat[0]);
+        this.set('mapLat', lngLat[1]);
+        this.set('serviceName', serviceName);
+    },
+
+    _getQSValue: function(key) {
+        return decodeURIComponent(
+                window.location.search.replace(
+                    new RegExp("^(?:.*[&\\?]" + encodeURIComponent(key)
+                        .replace(/[\.\+\*]/g, "\\$&") + "(?:\\=([^&]*))?)?.*$", "i"), "$1"));
+    },
+
+    _processRequestsJSON: function(raw) {
       if (!raw || typeof raw !== 'object' || !raw.hasOwnProperty('features')) {
-        this.set('status', 'Loading meters failed.');
+        this.set('status', 'Loading requests failed.');
         return;
       };
 
-      var meters = raw;
-      meters.features = raw.features.reduce((accum, rawFeature) => {
+      var requests = raw;
+      requests.features = raw.features.reduce((accum, rawFeature) => {
         var feature = rawFeature;
 
-        var type;
-        if (feature.properties.state === 'open') type = 'info';
-        else if (feature.properties.state === 'closed') type = 'important';
-        else type = 'unknown';
+        var type = 'info'
+        //if (feature.properties.state === 'open') type = 'info';
+        //else if (feature.properties.state === 'closed') type = 'important';
+        //else type = 'unknown';
 
-        feature.properties['marker-icon'] = {
+        /*feature.properties['marker-icon'] = {
           'icon-base' : 'static-icon',
           'icon-type' : type
         };
         feature.properties['marker-popup'] = {
           'popup-base' : 'data-popup',
-          'popup-title' : `Parking Meter ${feature.properties.pole}`,
+          'popup-title' : `${feature.properties.address}`,
           'popup-data' : {
-            'Status' : feature.properties.state === 'closed' ? 'In Use' : feature.properties.state,
-            'Area' : feature.properties.area,
-            'Pole' : feature.properties.pole,
-            'Last Payment' : feature.properties.latest_payment ? centsToDollars(feature.properties.latest_payment.amountpaid) : 'Unknown'
+            'Status' : feature.properties.status_description,
+            'Description' : feature.properties.description
           }
-        };
-        if (feature.properties.state === 'open' || feature.properties.state === 'closed') {
-          const {timeStr, time} = getTimeInWords(new Date(), new Date(feature.properties.latest_payment.local_enddatetime));
-          feature.properties['marker-popup']['popup-data'][timeStr] = time;
-        }
-        feature.id = feature.properties.pole;
+        };*/
+        feature.id = feature.properties.service_request_id;
         accum = accum.concat([feature]);
         return accum;
       }, []);
 
-      this.set('status', 'Successfully loaded meters.');
-      this.set('meters', meters);
+      this.set('status', 'Successfully loaded requests.');
+      console.log(requests);
+      this.set('requests', requests);
     }
   });
 
